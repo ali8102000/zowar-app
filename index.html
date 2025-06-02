@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zowar (زُوّار) - نموذج أولي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <!-- Visualization & Content Choices: 
+        - Splash Screen: Fullscreen div with app name "Zowar", fades out. Goal: Branding. Method: HTML/CSS/JS.
+        - Stories: Horizontal scrolling circles. Goal: Inform/Engage. Viz: Styled divs. Interaction: Click (mock). Method: HTML/Tailwind.
+        - Reels: Vertical scrolling cards. Goal: Engage. Viz: Styled divs with mock content. Interaction: Like/Comment buttons (mock UI change + sound). Method: HTML/Tailwind/JS/Tone.js.
+        - Active Users: Horizontal list of avatars. Goal: Inform. Viz: Styled divs. Method: HTML/Tailwind.
+        - Chat List & View: Mock lists and message bubbles. Goal: Simulate communication. Interaction: Click chat to open, type & send message (mock + sound). Method: HTML/Tailwind/JS/Tone.js.
+        - Geo-Rooms (Explore): Cards for rooms. Gemini API for icebreakers. Goal: Organize/Engage. Method: HTML/Tailwind/JS/Fetch API/Tone.js.
+        - Settings: Modal with theme toggle. Goal: User Customization. Method: HTML/Tailwind/JS.
+        - Sounds: Notification, message send, call ringing (simulated), UI clicks. Goal: Enhance UX. Library: Tone.js.
+        - NO Chart.js/Plotly.js as the focus shifted to app simulation rather than data dashboard.
+    -->
+    <style>
+        body { font-family: 'Tajawal', sans-serif; background-color: #f0f2f5; -webkit-tap-highlight-color: transparent; }
+        .app-container { max-width: 420px; margin: 0 auto; background-color: #ffffff; min-height: 100vh; display: flex; flex-direction: column; box-shadow: 0 0 20px rgba(0,0,0,0.1); overflow: hidden; }
+        .main-content { flex-grow: 1; overflow-y: auto; padding-bottom: 70px; }
+        .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; max-width: 420px; margin: 0 auto; background-color: #ffffff; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-around; padding: 8px 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 1000;}
+        .nav-item { flex: 1; text-align: center; padding: 8px 0; cursor: pointer; color: #6b7280; transition: color 0.2s ease-in-out, transform 0.1s ease-in-out; }
+        .nav-item.active { color: #1e40af; /* indigo-800 */ }
+        .nav-item:active { transform: scale(0.95); }
+        .nav-icon { font-size: 1.5rem; margin-bottom: 2px; } /* Unicode icons */
+        .section { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .splash-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #1e3a8a; /* indigo-800 */ display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; transition: opacity 0.8s ease-out, visibility 0.8s ease-out; }
+        .splash-screen.hidden { opacity: 0; visibility: hidden; }
+        .splash-logo { font-family: 'Tajawal', sans-serif; font-weight: 900; font-size: 3.5rem; color: #ffffff; letter-spacing: -1px; }
+        .splash-subtitle { font-size: 1.1rem; color: #93c5fd; /* blue-300 */ margin-top: 8px; }
+        .story-circle { width: 60px; height: 60px; border-radius: 50%; border: 3px solid #10b981; /* teal-500 */ padding: 2px; background-color: white; cursor: pointer; }
+        .story-circle img, .active-user-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+        .reel-card { background-color: #1f2937; /* gray-800 */ border-radius: 12px; margin-bottom: 16px; overflow: hidden; position: relative; aspect-ratio: 9/16; color: white; }
+        .reel-actions button { background: rgba(255,255,255,0.2); border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; margin-bottom: 12px; transition: background-color 0.2s; }
+        .reel-actions button:hover { background: rgba(255,255,255,0.3); }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 2000; opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; }
+        .modal.active { opacity: 1; visibility: visible; }
+        .modal-content { background-color: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 380px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .dark-mode { background-color: #1f2937; color: #e5e7eb; }
+        .dark-mode .app-container, .dark-mode .bottom-nav, .dark-mode .modal-content { background-color: #111827; /* gray-900 */ color: #d1d5db; /* gray-300 */ }
+        .dark-mode .bottom-nav { border-top-color: #374151; /* gray-700 */ }
+        .dark-mode .story-circle { border-color: #059669; /* teal-600 */ }
+        .dark-mode .reel-card { background-color: #374151; /* gray-700 */ }
+        .dark-mode .nav-item.active { color: #60a5fa; /* blue-400 */ }
+        .dark-mode .nav-item { color: #9ca3af; /* gray-400 */ }
+        .dark-mode .gemini-suggestion-item { background-color: #374151; border-right-color: #2563eb; color: #d1d5db; }
+        .dark-mode .btn-primary, .dark-mode .btn-secondary { background-color: #2563eb; }
+        .dark-mode .btn-primary:hover, .dark-mode .btn-secondary:hover { background-color: #1d4ed8; }
+        .chat-bubble { padding: 8px 12px; border-radius: 18px; margin-bottom: 8px; max-width: 75%; word-wrap: break-word; }
+        .chat-bubble.sent { background-color: #1e40af; color: white; margin-left: auto; border-bottom-right-radius: 4px; }
+        .chat-bubble.received { background-color: #e5e7eb; color: #1f2937; margin-right: auto; border-bottom-left-radius: 4px; }
+        .dark-mode .chat-bubble.sent { background-color: #60a5fa; color: #111827; }
+        .dark-mode .chat-bubble.received { background-color: #374151; color: #d1d5db; }
+        .btn-primary { background-color: #1e40af; color: white; padding: 10px 16px; border-radius: 8px; font-weight: 600; transition: background-color 0.2s; }
+        .btn-primary:hover { background-color: #1c357a; }
+        .btn-secondary { background-color: #059669; color: white; padding: 10px 16px; border-radius: 8px; font-weight: 600; transition: background-color 0.2s; }
+        .btn-secondary:hover { background-color: #047857; }
+        .loading-indicator { border: 4px solid #f3f3f3; border-top: 4px solid #1e40af; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 16px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .gemini-suggestion-item { background-color: #e0f2fe; border-right: 4px solid #0ea5e9; padding: 0.65rem 1rem; border-radius: 0.5rem; margin-bottom: 0.65rem; font-size: 0.9rem; transition: background-color 0.3s ease;}
+    </style>
+</head>
+<body>
+    <div id="splash-screen" class="splash-screen">
+        <div class="splash-logo">Zowar</div>
+        <div class="splash-subtitle">زُوّار</div>
+        <div class="loading-indicator mt-8 border-top-white"></div>
+    </div>
+
+    <div class="app-container">
+        <header class="p-4 bg-white dark:bg-gray-900 shadow-sm sticky top-0 z-50">
+            <div class="flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-indigo-700 dark:text-blue-400">Zowar</h1>
+                <div class="flex items-center space-x-3 rtl:space-x-reverse">
+                    <button class="text-gray-600 dark:text-gray-300 hover:text-indigo-700 dark:hover:text-blue-400 text-2xl">🔍</button>
+                    <button class="text-gray-600 dark:text-gray-300 hover:text-indigo-700 dark:hover:text-blue-400 text-2xl">🔔</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <section id="home-section" class="section active p-4">
+                <div class="mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">القصص</h2>
+                    <div class="flex space-x-3 rtl:space-x-reverse overflow-x-auto pb-2">
+                        <div class="story-circle flex-shrink-0"><img src="https://placehold.co/60x60/10b981/FFFFFF?text=S1" alt="Story 1"></div>
+                        <div class="story-circle flex-shrink-0"><img src="https://placehold.co/60x60/3b82f6/FFFFFF?text=S2" alt="Story 2"></div>
+                        <div class="story-circle flex-shrink-0"><img src="https://placehold.co/60x60/ef4444/FFFFFF?text=S3" alt="Story 3"></div>
+                        <div class="story-circle flex-shrink-0"><img src="https://placehold.co/60x60/f97316/FFFFFF?text=S4" alt="Story 4"></div>
+                        <div class="story-circle flex-shrink-0"><img src="https://placehold.co/60x60/8b5cf6/FFFFFF?text=S5" alt="Story 5"></div>
+                    </div>
+                </div>
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">الريلز</h2>
+                    <div class="space-y-4" id="reels-feed">
+                    </div>
+                </div>
+            </section>
+
+            <section id="explore-section" class="section p-4">
+                <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200 mb-4">استكشف الغرف الجغرافية</h2>
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="bg-gradient-to-br from-purple-500 to-indigo-600 p-4 rounded-lg text-white shadow-lg">
+                        <h3 class="font-semibold">غرفة أهل الحي 🏡</h3>
+                        <p class="text-xs opacity-80">52 عضو نشط</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-teal-500 to-cyan-600 p-4 rounded-lg text-white shadow-lg">
+                        <h3 class="font-semibold">نقاشات القهوة ☕</h3>
+                        <p class="text-xs opacity-80">30 عضو نشط</p>
+                    </div>
+                </div>
+                <div class="mt-6 p-4 bg-sky-50 dark:bg-gray-800 rounded-lg border border-sky-200 dark:border-gray-700">
+                    <h4 class="font-bold text-sky-700 dark:text-sky-300 text-md mb-2">✨ أفكار لبدء المحادثة</h4>
+                    <p class="text-sm text-sky-600 dark:text-sky-400 mb-3">
+                        تحتاج إلهام؟ دع الذكاء الاصطناعي يقترح مواضيع شيقة!
+                    </p>
+                    <button id="generate-icebreakers-btn" class="btn-secondary text-sm w-full">
+                        💡 اقترح مواضيع الآن
+                    </button>
+                    <div id="loading-gemini" class="mt-3 text-center" style="display: none;">
+                        <div class="loading-indicator"></div>
+                        <p class="text-xs text-sky-600 dark:text-sky-400">جاري توليد الأفكار...</p>
+                    </div>
+                    <div id="icebreakers-suggestions" class="mt-4 text-sm text-slate-700 dark:text-slate-300 space-y-2"></div>
+                    <p id="gemini-error-message" class="mt-3 text-xs text-red-500 dark:text-red-400" style="display: none;"></p>
+                </div>
+            </section>
+
+            <section id="messages-section" class="section">
+                <div id="chat-list-view">
+                    <div class="p-4 border-b dark:border-gray-700">
+                        <input type="text" placeholder="ابحث في المحادثات..." class="w-full p-2 rounded-lg bg-gray-100 dark:bg-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+                    </div>
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 p-4">الأشخاص النشطون</h2>
+                     <div class="flex space-x-3 rtl:space-x-reverse overflow-x-auto px-4 pb-3">
+                        <div class="active-user-avatar text-center flex-shrink-0 w-16">
+                            <img src="https://placehold.co/50x50/22c55e/FFFFFF?text=A1" alt="Active User 1" class="mx-auto story-circle border-green-500">
+                            <p class="text-xs mt-1 dark:text-gray-300">نور</p>
+                        </div>
+                        <div class="active-user-avatar text-center flex-shrink-0 w-16">
+                            <img src="https://placehold.co/50x50/22c55e/FFFFFF?text=A2" alt="Active User 2" class="mx-auto story-circle border-green-500">
+                            <p class="text-xs mt-1 dark:text-gray-300">أحمد</p>
+                        </div>
+                         <div class="active-user-avatar text-center flex-shrink-0 w-16">
+                            <img src="https://placehold.co/50x50/f87171/FFFFFF?text=A3" alt="Active User 3" class="mx-auto story-circle border-red-400">
+                            <p class="text-xs mt-1 dark:text-gray-300">سارة</p>
+                        </div>
+                    </div>
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 p-4 pt-0">الرسائل</h2>
+                    <div id="chat-list-items" class="divide-y dark:divide-gray-700">
+                    </div>
+                </div>
+                <div id="chat-view" style="display: none;" class="h-full flex flex-col">
+                    <header class="p-3 bg-gray-100 dark:bg-gray-800 flex items-center space-x-3 rtl:space-x-reverse shadow-sm">
+                        <button id="back-to-chat-list" class="text-xl text-gray-600 dark:text-gray-300">‹</button>
+                        <img id="chat-view-avatar" src="https://placehold.co/40x40" alt="User Avatar" class="w-10 h-10 rounded-full">
+                        <div>
+                            <h3 id="chat-view-name" class="font-semibold text-gray-800 dark:text-gray-200">اسم المستخدم</h3>
+                            <p id="chat-view-status" class="text-xs text-green-500">نشط الآن</p>
+                        </div>
+                        <button class="mr-auto rtl:ml-auto rtl:mr-0 text-xl text-indigo-600 dark:text-blue-400" id="call-btn">📞</button>
+                    </header>
+                    <div id="chat-messages" class="flex-grow p-4 space-y-2 overflow-y-auto">
+                    </div>
+                    <footer class="p-3 bg-gray-100 dark:bg-gray-800 flex items-center">
+                        <input id="message-input" type="text" placeholder="اكتب رسالتك..." class="flex-grow p-2 rounded-full bg-white dark:bg-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <button id="send-message-btn" class="p-2 text-2xl text-indigo-600 dark:text-blue-400 mr-2 rtl:ml-2 rtl:mr-0">➢</button>
+                    </footer>
+                </div>
+            </section>
+
+            <section id="profile-section" class="section p-4">
+                <div class="text-center pt-8">
+                    <img src="https://placehold.co/100x100/1e40af/FFFFFF?text=ZU" alt="Profile Picture" class="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-white shadow-lg">
+                    <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200">زائر مميز</h2>
+                    <p class="text-gray-600 dark:text-gray-400">@zawar_user123</p>
+                </div>
+                <div class="mt-8 grid grid-cols-3 gap-4 text-center">
+                    <div>
+                        <p class="text-xl font-bold text-gray-800 dark:text-gray-200">120</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">منشور</p>
+                    </div>
+                    <div>
+                        <p class="text-xl font-bold text-gray-800 dark:text-gray-200">1.5K</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">متابع</p>
+                    </div>
+                    <div>
+                        <p class="text-xl font-bold text-gray-800 dark:text-gray-200">300</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">يتابع</p>
+                    </div>
+                </div>
+                <div class="mt-8">
+                    <button id="settings-btn" class="w-full p-3 bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 hover:bg-gray-300 rounded-lg text-gray-700 dark:text-gray-200 font-semibold">الإعدادات ⚙️</button>
+                </div>
+            </section>
+        </main>
+
+        <nav class="bottom-nav">
+            <div class="nav-item active" data-section="home-section">
+                <div class="nav-icon">🏠</div> <span class="text-xs">الرئيسية</span>
+            </div>
+            <div class="nav-item" data-section="explore-section">
+                <div class="nav-icon">🧭</div> <span class="text-xs">استكشف</span>
+            </div>
+            <div class="nav-item" data-section="messages-section">
+                <div class="nav-icon">💬</div> <span class="text-xs">الرسائل</span>
+            </div>
+            <div class="nav-item" data-section="profile-section">
+                <div class="nav-icon">👤</div> <span class="text-xs">ملفي</span>
+            </div>
+        </nav>
+    </div>
+
+    <div id="settings-modal" class="modal">
+        <div class="modal-content dark:bg-gray-800">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200">الإعدادات</h3>
+                <button id="close-settings-modal" class="text-2xl text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">&times;</button>
+            </div>
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <label for="dark-mode-toggle" class="text-gray-700 dark:text-gray-300">الوضع الداكن</label>
+                    <button id="dark-mode-toggle" class="w-12 h-6 bg-gray-300 dark:bg-gray-600 rounded-full p-1 flex items-center transition-colors duration-300 ease-in-out">
+                        <span class="w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ease-in-out translate-x-0 dark:translate-x-6"></span>
+                    </button>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-700 dark:text-gray-300">إشعارات الرسائل</span>
+                    <span class="text-green-500">مفعلة</span>
+                </div>
+                 <div class="flex justify-between items-center">
+                    <span class="text-gray-700 dark:text-gray-300">إشعارات المكالمات</span>
+                    <span class="text-green-500">مفعلة</span>
+                </div>
+            </div>
+            <button class="mt-8 w-full btn-primary">حفظ التغييرات</button>
+        </div>
+    </div>
+    
+    <div id="calling-screen" class="fixed inset-0 bg-indigo-700 text-white flex flex-col items-center justify-center z-[5000]" style="display:none;">
+        <img id="calling-avatar" src="https://placehold.co/120x120/FFFFFF/1e3a8a?text=C" alt="Calling Avatar" class="w-32 h-32 rounded-full mb-6 border-4 border-indigo-500">
+        <h2 id="calling-name" class="text-3xl font-bold mb-2">اسم المتصل</h2>
+        <p id="calling-status-text" class="text-lg text-indigo-200 mb-8">جاري الاتصال...</p>
+        <button id="end-call-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-4 px-8 rounded-full text-2xl">
+            📞
+        </button>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const splashScreen = document.getElementById('splash-screen');
+            setTimeout(() => {
+                splashScreen.classList.add('hidden');
+            }, 2500);
+
+            const sections = document.querySelectorAll('.section');
+            const navItems = document.querySelectorAll('.nav-item');
+            const mobileNavSelect = document.getElementById('mobile-nav'); 
+
+            function setActiveSection(sectionId) {
+                sections.forEach(section => {
+                    section.classList.toggle('active', section.id === sectionId);
+                });
+                navItems.forEach(item => {
+                    item.classList.toggle('active', item.dataset.section === sectionId);
+                });
+            }
+
+            navItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    playUiClickSound();
+                    setActiveSection(item.dataset.section);
+                });
+            });
+            
+            setActiveSection('home-section');
+
+
+            const reelsFeed = document.getElementById('reels-feed');
+            const mockReels = [
+                { user: "مبدع المحتوى", caption: "أجواء خيالية من رحلتي الأخيرة! 🌍✨ #سفر #مغامرات", likes: 1203, comments: 45, videoPlaceholder: "https://placehold.co/360x640/1e3a8a/FFFFFF?text=Reel+1" },
+                { user: "طباخ ماهر", caption: "وصفتي السرية لكيك الشوكولاتة! 🍰🍫 #طبخ #حلويات", likes: 876, comments: 92, videoPlaceholder: "https://placehold.co/360x640/10b981/FFFFFF?text=Reel+2" },
+                { user: "فنان رقمي", caption: "رسمتي الجديدة بالألوان المائية 🎨 #فن #ابداع", likes: 2050, comments: 150, videoPlaceholder: "https://placehold.co/360x640/f97316/FFFFFF?text=Reel+3" }
+            ];
+
+            mockReels.forEach(reel => {
+                const reelElement = document.createElement('div');
+                reelElement.className = 'reel-card shadow-xl';
+                reelElement.innerHTML = `
+                    <img src="${reel.videoPlaceholder}" alt="Reel video placeholder" class="w-full h-full object-cover">
+                    <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent">
+                        <p class="font-semibold text-sm">${reel.user}</p>
+                        <p class="text-xs opacity-80">${reel.caption}</p>
+                    </div>
+                    <div class="absolute bottom-4 right-4 flex flex-col items-center reel-actions">
+                        <button class="like-btn">❤️ <span class="text-xs ml-1">${reel.likes}</span></button>
+                        <button class="comment-btn">💬 <span class="text-xs ml-1">${reel.comments}</span></button>
+                        <button>🔗</button>
+                    </div>
+                `;
+                reelsFeed.appendChild(reelElement);
+            });
+
+
+            const chatListView = document.getElementById('chat-list-view');
+            const chatView = document.getElementById('chat-view');
+            const chatListItems = document.getElementById('chat-list-items');
+            const backToChatListBtn = document.getElementById('back-to-chat-list');
+            
+            const mockChats = [
+                { id: 1, name: "علي حسن", avatar: "https://placehold.co/50x50/3b82f6/FFFFFF?text=AH", lastMessage: "تمام، نلتقي غداً.", unread: 2, online: true },
+                { id: 2, name: "فاطمة أحمد", avatar: "https://placehold.co/50x50/ef4444/FFFFFF?text=FA", lastMessage: "شكراً جزيلاً لك!", unread: 0, online: false },
+                { id: 3, name: "مجموعة الأصدقاء", avatar: "https://placehold.co/50x50/10b981/FFFFFF?text=GA", lastMessage: "محمد: هل الجميع مستعد للرحلة؟", unread: 5, online: true }
+            ];
+
+            mockChats.forEach(chat => {
+                const chatItem = document.createElement('div');
+                chatItem.className = 'p-4 flex items-center space-x-3 rtl:space-x-reverse hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors';
+                chatItem.dataset.chatId = chat.id;
+                chatItem.innerHTML = `
+                    <img src="${chat.avatar}" alt="${chat.name}" class="w-12 h-12 rounded-full">
+                    <div class="flex-grow">
+                        <h3 class="font-semibold text-gray-800 dark:text-gray-200">${chat.name}</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 truncate">${chat.lastMessage}</p>
+                    </div>
+                    ${chat.unread > 0 ? `<div class="bg-indigo-600 text-white text-xs rounded-full px-2 py-1">${chat.unread}</div>` : ''}
+                `;
+                chatItem.addEventListener('click', () => openChat(chat));
+                chatListItems.appendChild(chatItem);
+            });
+
+            function openChat(chatData) {
+                playUiClickSound();
+                document.getElementById('chat-view-avatar').src = chatData.avatar;
+                document.getElementById('chat-view-name').textContent = chatData.name;
+                document.getElementById('chat-view-status').textContent = chatData.online ? "نشط الآن" : "غير متصل";
+                document.getElementById('chat-view-status').className = `text-xs ${chatData.online ? 'text-green-500' : 'text-gray-500'}`;
+                
+                const messagesContainer = document.getElementById('chat-messages');
+                messagesContainer.innerHTML = ''; 
+                
+                const sampleMessages = [
+                    { sender: 'other', text: `مرحباً ${chatData.name}! كيف حالك؟` },
+                    { sender: 'me', text: 'أهلاً! أنا بخير، شكراً لسؤالك.' },
+                    { sender: 'other', text: chatData.lastMessage }
+                ];
+
+                sampleMessages.forEach(msg => addMessageToChat(msg.text, msg.sender === 'me'));
+                
+                chatListView.style.display = 'none';
+                chatView.style.display = 'flex';
+                playNotificationSound(); 
+            }
+
+            backToChatListBtn.addEventListener('click', () => {
+                playUiClickSound();
+                chatView.style.display = 'none';
+                chatListView.style.display = 'block';
+            });
+
+            const messageInput = document.getElementById('message-input');
+            const sendMessageBtn = document.getElementById('send-message-btn');
+
+            function addMessageToChat(text, isSent) {
+                const messagesContainer = document.getElementById('chat-messages');
+                const bubble = document.createElement('div');
+                bubble.className = `chat-bubble ${isSent ? 'sent' : 'received'}`;
+                bubble.textContent = text;
+                messagesContainer.appendChild(bubble);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+
+            sendMessageBtn.addEventListener('click', () => {
+                const messageText = messageInput.value.trim();
+                if (messageText) {
+                    addMessageToChat(messageText, true);
+                    playMessageSendSound();
+                    messageInput.value = '';
+                    
+                    setTimeout(() => {
+                        addMessageToChat("تمام، وصلت الرسالة!", false);
+                        playNotificationSound();
+                    }, 1000);
+                }
+            });
+            messageInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendMessageBtn.click();
+            });
+
+
+            const settingsModal = document.getElementById('settings-modal');
+            const settingsBtn = document.getElementById('settings-btn');
+            const closeSettingsModalBtn = document.getElementById('close-settings-modal');
+            const darkModeToggleBtn = document.getElementById('dark-mode-toggle');
+
+            settingsBtn.addEventListener('click', () => {
+                playUiClickSound();
+                settingsModal.classList.add('active');
+            });
+            closeSettingsModalBtn.addEventListener('click', () => {
+                playUiClickSound();
+                settingsModal.classList.remove('active');
+            });
+            darkModeToggleBtn.addEventListener('click', () => {
+                playUiClickSound();
+                document.body.classList.toggle('dark-mode');
+                const span = darkModeToggleBtn.querySelector('span');
+                span.classList.toggle('translate-x-0');
+                span.classList.toggle('dark:translate-x-6');
+                localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+            });
+
+            if (localStorage.getItem('darkMode') === 'true') {
+                document.body.classList.add('dark-mode');
+                const span = darkModeToggleBtn.querySelector('span');
+                span.classList.remove('translate-x-0');
+                span.classList.add('dark:translate-x-6');
+            }
+
+            reelsFeed.addEventListener('click', (e) => {
+                if (e.target.closest('.like-btn') || e.target.closest('.comment-btn')) {
+                    playUiClickSound();
+                }
+            });
+
+
+            let uiClickSynth, notificationSynth, messageSendSynth, callRingingSynth, callingProgressSynth;
+
+            try {
+                uiClickSynth = new Tone.PluckSynth({ volume: -15, attackNoise: 0.5, dampening: 2000, resonance:0.1 }).toDestination();
+                notificationSynth = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 0.5 }, volume: -12 }).toDestination();
+                messageSendSynth = new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.01, decay: 0.05, sustain: 0.01, release: 0.1 }, volume: -10 }).toDestination();
+                callRingingSynth = new Tone.Loop(time => {
+                    new Tone.Synth({ oscillator: { type: "square" }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 }, volume: -18 }).toDestination().triggerAttackRelease("G5", "8n", time);
+                    new Tone.Synth({ oscillator: { type: "square" }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 }, volume: -18 }).toDestination().triggerAttackRelease("C5", "8n", time + 0.25);
+                }, "1s");
+                callingProgressSynth = new Tone.Loop(time => {
+                    new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.01, decay: 0.4, sustain: 0, release: 0.1 }, volume: -22 }).toDestination().triggerAttackRelease("A4", "2n", time);
+                }, "1.5s");
+                Tone.Transport.start();
+            } catch (err) {
+                console.warn("Tone.js synths could not be initialized. Sounds will be disabled.", err);
+            }
+            
+            function playSound(synth, note, duration) {
+                if (synth && Tone.context.state === 'running') {
+                    try { synth.triggerAttackRelease(note, duration); } catch (e) { console.warn("Sound play failed", e); }
+                } else if (synth && Tone.context.state !== 'running') {
+                    Tone.start().then(() => {
+                        if (synth) synth.triggerAttackRelease(note, duration);
+                    }).catch(e => console.warn("Tone.start() failed", e));
+                }
+            }
+
+            function playUiClickSound() { playSound(uiClickSynth, "C5", "32n"); }
+            function playNotificationSound() { playSound(notificationSynth, "E6", "8n"); }
+            function playMessageSendSound() { playSound(messageSendSynth, "A5", "16n"); }
+            function startCallRingingSound() { if (callRingingSynth) callRingingSynth.start(0); }
+            function stopCallRingingSound() { if (callRingingSynth) callRingingSynth.stop(0); }
+            function startCallingProgressSound() { if (callingProgressSynth) callingProgressSynth.start(0); }
+            function stopCallingProgressSound() { if (callingProgressSynth) callingProgressSynth.stop(0); }
+
+            document.body.addEventListener('click', () => { // Ensure Tone.js context is started on first interaction
+                if (Tone.context.state !== 'running') {
+                    Tone.start().catch(e => console.warn("Tone.start() on body click failed", e));
+                }
+            }, { once: true });
+
+
+            const callBtn = document.getElementById('call-btn');
+            const callingScreen = document.getElementById('calling-screen');
+            const endCallBtn = document.getElementById('end-call-btn');
+            const callingAvatar = document.getElementById('calling-avatar');
+            const callingName = document.getElementById('calling-name');
+            const callingStatusText = document.getElementById('calling-status-text');
+
+            callBtn.addEventListener('click', () => {
+                playUiClickSound();
+                const currentChatName = document.getElementById('chat-view-name').textContent;
+                const currentChatAvatar = document.getElementById('chat-view-avatar').src;
+                
+                callingName.textContent = currentChatName;
+                callingAvatar.src = currentChatAvatar;
+                callingStatusText.textContent = "جاري الاتصال...";
+                callingScreen.style.display = 'flex';
+                startCallingProgressSound();
+
+                setTimeout(() => {
+                    if (callingScreen.style.display === 'flex') { // Check if call is still active
+                        callingStatusText.textContent = "يرن...";
+                        stopCallingProgressSound();
+                        startCallRingingSound();
+                    }
+                }, 3000); 
+
+                 setTimeout(() => { // Simulate call answered or failed
+                    if (callingScreen.style.display === 'flex') {
+                        // callingStatusText.textContent = "المكالمة متصلة 00:01"; // Or "فشل الاتصال"
+                        // stopCallRingingSound();
+                        // For demo, just end it
+                         endCallBtn.click();
+                    }
+                }, 8000); 
+            });
+
+            endCallBtn.addEventListener('click', () => {
+                playUiClickSound();
+                callingScreen.style.display = 'none';
+                stopCallRingingSound();
+                stopCallingProgressSound();
+            });
+
+            const generateIcebreakersBtn = document.getElementById('generate-icebreakers-btn');
+            const icebreakersSuggestionsDiv = document.getElementById('icebreakers-suggestions');
+            const loadingGemini = document.getElementById('loading-gemini');
+            const geminiErrorMessageEl = document.getElementById('gemini-error-message');
+
+            generateIcebreakersBtn.addEventListener('click', () => {
+                playUiClickSound();
+                fetchIcebreakers();
+            });
+
+            async function fetchIcebreakers() {
+                loadingGemini.style.display = 'block';
+                icebreakersSuggestionsDiv.innerHTML = '';
+                geminiErrorMessageEl.style.display = 'none';
+                generateIcebreakersBtn.disabled = true;
+                generateIcebreakersBtn.classList.add('opacity-70', 'cursor-not-allowed');
+
+                const prompt = "اقترح 3 أسئلة كسر جمود أو مواضيع نقاش شيقة ومبتكرة لمجموعة من الأشخاص في غرفة دردشة جغرافية يلتقون لأول مرة. يجب أن تكون الاقتراحات باللغة العربية، خفيفة، ممتعة، ومناسبة لثقافة عربية متنوعة. اجعلها تشجع على التفاعل الإيجابي. قدم الاقتراحات كقائمة من السلاسل النصية.";
+                
+                let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+                const payload = {
+                    contents: chatHistory,
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: { "suggestions": { type: "ARRAY", items: { type: "STRING" } } },
+                            required: ["suggestions"]
+                        }
+                    }
+                };
+                const apiKey = ""; 
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(`API Error: ${response.status} ${response.statusText}. Details: ${JSON.stringify(errorData)}`);
+                    }
+                    const result = await response.json();
+                   
+                    if (result.candidates && result.candidates[0]?.content?.parts?.[0]) {
+                        const rawJsonText = result.candidates[0].content.parts[0].text;
+                        const parsedJson = JSON.parse(rawJsonText);
+                        
+                        if (parsedJson.suggestions && Array.isArray(parsedJson.suggestions)) {
+                            if (parsedJson.suggestions.length > 0) {
+                                parsedJson.suggestions.forEach(suggestion => {
+                                    const p = document.createElement('p');
+                                    p.className = 'gemini-suggestion-item dark:bg-gray-700 dark:border-sky-500 dark:text-gray-200';
+                                    p.textContent = "💡 " + suggestion;
+                                    icebreakersSuggestionsDiv.appendChild(p);
+                                });
+                            } else {
+                                icebreakersSuggestionsDiv.innerHTML = '<p class="text-slate-500 dark:text-slate-400">لم يتم العثور على اقتراحات.</p>';
+                            }
+                        } else { throw new Error("تنسيق الاقتراحات غير صحيح."); }
+                    } else { throw new Error("لم يتم العثور على محتوى صالح."); }
+                } catch (error) {
+                    console.error('Error fetching icebreakers:', error);
+                    geminiErrorMessageEl.textContent = `حدث خطأ: ${error.message}.`;
+                    geminiErrorMessageEl.style.display = 'block';
+                } finally {
+                    loadingGemini.style.display = 'none';
+                    generateIcebreakersBtn.disabled = false;
+                    generateIcebreakersBtn.classList.remove('opacity-70', 'cursor-not-allowed');
+                }
+            }
+        });
+    </script>
+</body>
+</html>
